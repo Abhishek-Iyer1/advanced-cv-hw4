@@ -4,7 +4,8 @@ import numpy as np
 from nn import *
 from util import *
 
-
+# Np random seed
+np.random.seed(0)
 # fake data
 # feel free to plot it in 2D
 # what do you think these 4 classes are?
@@ -92,20 +93,33 @@ learning_rate = 1e-3
 for itr in range(max_iters):
     total_loss = 0
     avg_acc = 0
+    
+    # Iterate across samples in batches
     for xb, yb in batches:
-        ##########################
-        ##### your code here #####
-        ##########################
-        pass
+
         # forward
+        h1 = forward(xb, params, "layer1")
+        probs = forward(h1, params, "output", softmax)
 
         # loss
+        loss, acc = compute_loss_and_acc(yb, probs)
+
         # be sure to add loss and accuracy to epoch totals
+        total_loss += loss
+        avg_acc += acc
+
+        delta1 = probs - yb # derivative of cross_entropy(softmax(x)) which comes out to be probs - 1(correct values)
 
         # backward
+        delta2 = backwards(delta1, params, "output", linear_deriv)
+        backwards(delta2, params, "layer1", sigmoid_deriv)
 
-        # apply gradient
         # gradients should be summed over batch samples
+        for name in ["layer1", "output"]:
+            params["W" + name] -= learning_rate*params["grad_W" + name]
+            params["b" + name] -= learning_rate*params["grad_b" + name]
+    
+    avg_acc /= batch_num
 
     if itr % 100 == 0:
         print(
@@ -133,22 +147,48 @@ params_orig = copy.deepcopy(params)
 
 # compute gradients using finite difference
 eps = 1e-6
-for k, v in params.items():
-    if "_" in k:
+for key, v in params.items():
+    if "_" in key:
         continue
-    # for each value inside the parameter
-    #   add epsilon
-    #   run the network
-    #   get the loss
-    #   subtract 2*epsilon
-    #   run the network
-    #   get the loss
-    #   restore the original parameter value
-    #   compute derivative with central diffs
+    if len(v.shape) == 1:
+        v = np.expand_dims(v, axis=0)
+    d, k = v.shape
+    epsilons = np.zeros((d*k, d, k))
+    row_indices = np.repeat(np.arange(d), k)
+    col_indices = np.tile(np.arange(k), d)
+    depth_indices = np.arange(d*k)
+    epsilons[depth_indices, row_indices, col_indices] = eps
+    
+    v = np.expand_dims(v, axis=0) # 1 x d x k
+    v_plus = v + epsilons
+    v_minus = v - epsilons
 
-    ##########################
-    ##### your code here #####
-    ##########################
+    losses_plus = []
+    losses_minus = []
+    
+    for i in range(d*k):
+        params[key] = v_plus[i]
+        h1_plus = forward(x, params, "layer1")
+        probs_plus = forward(h1_plus, params, "output", softmax)
+        loss_plus, _ = compute_loss_and_acc(y, probs_plus)
+        losses_plus.append(loss_plus)
+        
+        params[key] = v_minus[i]
+        h1_minus = forward(x, params, "layer1")
+        probs_minus = forward(h1_minus, params, "output", softmax)
+        loss_minus, _ = compute_loss_and_acc(y, probs_minus)
+        losses_minus.append(loss_minus)
+
+        params[key] = params_orig[key]
+    
+    losses_plus = np.array(losses_plus)
+    losses_minus = np.array(losses_minus)
+    
+    numerical_grad = (losses_plus - losses_minus) / (2 * eps)
+    numerical_grad = numerical_grad.reshape(d, k)
+    
+    params["grad_"+key] = numerical_grad
+
 
 total_error = 0
 for k in params.keys():

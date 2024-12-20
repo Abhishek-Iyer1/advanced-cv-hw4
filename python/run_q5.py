@@ -4,6 +4,7 @@ from nn import *
 from collections import Counter
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import ImageGrid
+from util import relu, relu_deriv
 import string
 
 train_data = scipy.io.loadmat('../data/nist36_train.mat')
@@ -19,6 +20,9 @@ batch_size = 36
 learning_rate =  3e-5
 hidden_size = 32
 lr_rate = 20
+momentum = 0.9
+
+# Get random batches
 batches = get_random_batches(train_x,np.ones((train_x.shape[0],1)),batch_size)
 batch_num = len(batches)
 
@@ -26,35 +30,47 @@ params = Counter()
 
 # Q5.1 & Q5.2
 # initialize layers here
-##########################
-##### your code here #####
-##########################
+initialize_weights(1024, 32, params, name="layer0")
+initialize_weights(32, 32, params, name="layer1")
+initialize_weights(32, 32, params, name="layer2")
+initialize_weights(32, 1024, params, name="output")
+
+# Initialize momentum values
+for name in ["layer0", "layer1", "layer2", "output"]:
+    params["m_W" + name] = np.zeros_like(params["W"+name])
+    params["m_b" + name] = np.zeros_like(params["b"+name])
+
 
 # should look like your previous training loops
 losses = []
 for itr in range(max_iters):
     total_loss = 0
-    for xb,_ in batches:
-        # training loop can be exactly the same as q2!
-        # your loss is now squared error
-        # delta is the d/dx of (x-y)^2
-        # to implement momentum
-        #   use 'm_'+name variables in initialize_weights from nn.py
-        #   to keep a saved value
-        #   params is a Counter(), which returns a 0 if an element is missing
-        #   so you should be able to write your loop without any special conditions
-
-        ##########################
-        ##### your code here #####
-        ##########################
-
+    for xb, _ in batches:
         # forward pass
+        h1 = forward(xb, params, "layer0", relu)
+        h2 = forward(h1, params, "layer1", relu)
+        h3 = forward(h2, params, "layer2", relu)
+        probs = forward(h3, params, "output", sigmoid)
 
-        # loss
+        # your loss is now squared error
+        loss = np.sum((probs-xb)**2)
+        total_loss += loss
+
+        # delta is the d/dx of (x-y)^2
+        delta = 2*(probs-xb)
 
         # backward
+        delta1 = backwards(delta, params, "output", sigmoid_deriv)
+        delta2 = backwards(delta1, params, "layer2", relu_deriv)
+        delta3 = backwards(delta2, params, "layer1", relu_deriv)
+        delta4 = backwards(delta3, params, "layer0", relu_deriv)
 
-        # apply gradient, remember to update momentum as well
+        # to implement momentum
+        for name in ["layer0", "layer1", "layer2", "output"]:
+            params["m_W" + name] = momentum*params["m_W" + name] - learning_rate*params["grad_W" + name]
+            params["m_b" + name] = momentum*params["m_b" + name] - learning_rate*params["grad_b" + name]
+            params["W" + name] += params["m_W"+name]
+            params["b" + name] += params["m_b"+name]
         
     
     losses.append(total_loss/train_x.shape[0])
@@ -85,12 +101,10 @@ for i, label in enumerate(visualize_labels):
     visualize_x[2*i:2*i+2] = valid_x[choices]
 
 # run visualize_x through your network
-# name the output reconstructed_x
-##########################
-##### your code here #####
-##########################
-
-
+h1 = forward(visualize_x, params, "layer0", relu)
+h2 = forward(h1, params, "layer1", relu)
+h3 = forward(h2, params, "layer2", relu)
+reconstructed_x = forward(h3, params, "output", sigmoid)
 
 # visualize
 fig = plt.figure()
@@ -108,6 +122,5 @@ plt.show()
 # Q5.3.2
 from skimage.metrics import peak_signal_noise_ratio
 # evaluate PSNR
-##########################
-##### your code here #####
-##########################
+psnr = np.sum(20 * np.log10(np.max(reconstructed_x, axis=1)) - 10 * np.log10(np.square(reconstructed_x).mean()))
+print(psnr)

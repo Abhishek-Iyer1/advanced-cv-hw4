@@ -20,8 +20,8 @@ if False:  # view the data
 
 max_iters = 50
 # pick a batch size, learning rate
-batch_size = None
-learning_rate = None
+batch_size = 32
+learning_rate = 1e-2
 hidden_size = 64
 ##########################
 ##### your code here #####
@@ -58,11 +58,29 @@ for itr in range(max_iters):
     total_loss = 0
     avg_acc = 0
     for xb, yb in batches:
-        # training loop can be exactly the same as q2!
-        ##########################
-        ##### your code here #####
-        ##########################
-        pass
+        # forward
+        h1 = forward(xb, params, "layer1")
+        probs = forward(h1, params, "output", softmax)
+
+        # loss
+        loss, acc = compute_loss_and_acc(yb, probs)
+
+        # be sure to add loss and accuracy to epoch totals
+        total_loss += loss
+        avg_acc += acc
+
+        delta1 = probs - yb # derivative of cross_entropy(softmax(x)) which comes out to be probs - 1(correct values)
+
+        # backward
+        delta2 = backwards(delta1, params, "output", linear_deriv)
+        backwards(delta2, params, "layer1", sigmoid_deriv)
+
+        # gradients should be summed over batch samples
+        for name in ["layer1", "output"]:
+            params["W" + name] -= learning_rate*params["grad_W" + name]
+            params["b" + name] -= learning_rate*params["grad_b" + name]
+    
+    avg_acc /= batch_num
 
     if itr % 2 == 0:
         print(
@@ -148,12 +166,10 @@ plt.show()
 
 # Q3.4
 confusion_matrix = np.zeros((train_y.shape[1], train_y.shape[1]))
-
-# compute confusion matrix
-##########################
-##### your code here #####
-##########################
-
+label_indices = np.argmax(test_y, axis=1)
+predicted_indices = np.argmax(test_probs, axis=1)
+for true_label, pred_label in zip(label_indices, predicted_indices):
+    confusion_matrix[true_label, pred_label] += 1
 
 import string
 

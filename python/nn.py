@@ -12,10 +12,10 @@ from util import *
 # X be [Examples, Dimensions]
 def initialize_weights(in_size, out_size, params, name=""):
     W, b = None, None
-
-    ##########################
-    ##### your code here #####
-    ##########################
+    lower_bound = (-1*np.sqrt(6))/(np.sqrt(in_size + out_size))
+    upper_bound = (np.sqrt(6))/(np.sqrt(in_size + out_size))
+    W = np.random.uniform(lower_bound, upper_bound, [in_size, out_size])
+    b = np.zeros(out_size)
 
     params["W" + name] = W
     params["b" + name] = b
@@ -25,12 +25,7 @@ def initialize_weights(in_size, out_size, params, name=""):
 # x is a matrix
 # a sigmoid activation function
 def sigmoid(x):
-    res = None
-
-    ##########################
-    ##### your code here #####
-    ##########################
-
+    res = 1/(1+np.exp(-x))
     return res
 
 
@@ -50,10 +45,9 @@ def forward(X, params, name="", activation=sigmoid):
     W = params["W" + name]
     b = params["b" + name]
 
-    ##########################
-    ##### your code here #####
-    ##########################
-
+    pre_act = X @ W + b
+    post_act = activation(pre_act)
+    
     # store the pre-activation and post-activation values
     # these will be important in backprop
     params["cache_" + name] = (X, pre_act, post_act)
@@ -66,11 +60,9 @@ def forward(X, params, name="", activation=sigmoid):
 # softmax should be done for each row
 def softmax(x):
     res = None
-
-    ##########################
-    ##### your code here #####
-    ##########################
-
+    max_elements = np.max(x, axis=1, keepdims=True)
+    x = x - max_elements
+    res = np.exp(x) / np.sum(np.exp(x), axis=1, keepdims=True)
     return res
 
 
@@ -80,10 +72,13 @@ def softmax(x):
 # probs is size [examples,classes]
 def compute_loss_and_acc(y, probs):
     loss, acc = None, None
-
-    ##########################
-    ##### your code here #####
-    ##########################
+    # Loss
+    loss = -np.sum(y*np.log(probs))
+    
+    # Accuracy
+    maximum_probs_indices = np.argmax(probs, axis=1)
+    y_at_max = y[np.arange(0, len(y)), maximum_probs_indices]
+    acc = np.sum(y_at_max) / len(y_at_max)
 
     return loss, acc
 
@@ -107,18 +102,27 @@ def backwards(delta, params, name="", activation_deriv=sigmoid_deriv):
     name -- name of the layer
     activation_deriv -- the derivative of the activation_func
     """
+    # do the derivative through activation first
+    # (don't forget activation_deriv is a function of post_act)
+    # then compute the derivative W, b, and X
     grad_X, grad_W, grad_b = None, None, None
     # everything you may need for this layer
     W = params["W" + name]
     b = params["b" + name]
     X, pre_act, post_act = params["cache_" + name]
 
-    # do the derivative through activation first
-    # (don't forget activation_deriv is a function of post_act)
-    # then compute the derivative W, b, and X
-    ##########################
-    ##### your code here #####
-    ##########################
+    del_f_del_a = activation_deriv(post_act)
+    del_a_del_w = X # N x d
+    del_a_del_x = W # d x k
+
+    # Compute dZ
+    dZ = delta * del_f_del_a
+    
+    # Compute gradients
+    grad_W = del_a_del_w.T @ dZ
+    grad_b = np.sum(dZ, axis=0)
+    grad_X = dZ @ del_a_del_x.T
+    
 
     # store the gradients
     params["grad_W" + name] = grad_W
@@ -130,8 +134,16 @@ def backwards(delta, params, name="", activation_deriv=sigmoid_deriv):
 # split x and y into random batches
 # return a list of [(batch1_x,batch1_y)...]
 def get_random_batches(x, y, batch_size):
+    # Same indices for batches_i_x and batches_i_y
+    # Batch_size is given
+    # Must handle unequal batch size for the last batch
     batches = []
-    ##########################
-    ##### your code here #####
-    ##########################
+    assert len(x) == len(y) # We want x and y to be the same sizes
+    indices = np.arange(0, len(x)) # From 0 to len(x) - 1
+    np.random.shuffle(indices) # Shuffles indices in place
+    for i in range(0, len(indices)//batch_size):
+        batch_indices = indices[i*batch_size : (i+1)*batch_size] #0 to 10, 10 to 20 ... of shuffled indices
+        batch_x = x[batch_indices]
+        batch_y = y[batch_indices]
+        batches.append((batch_x, batch_y)) # Construct a batch len(indices)//batch_size times
     return batches
